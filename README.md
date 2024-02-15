@@ -7,3 +7,7 @@
 5. You must create a 2 subnets in the VPC, first one should be named webapp and second one should be named db.
 6. The subnet has a /24 CIDR address range.
 7. Add a route to 0.0.0.0/0 for the webapp subnet. Do not add this for the db subnet.
+
+# Apis that need to be enabled 
+
+1. Compute Engine API
