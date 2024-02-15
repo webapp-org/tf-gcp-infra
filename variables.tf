@@ -64,3 +64,26 @@ variable "subnets" {
     # }
   }
 }
+
+variable "routes" {
+  type = map(object({
+    name             = string
+    network          = string
+    next_hop_gateway = string
+    dest_range       = string
+  }))
+  default = {
+    "app_vpc_route" = {
+      name             = "vpc-route"
+      network          = "app_vpc_network"
+      next_hop_gateway = "default-internet-gateway"
+      dest_range       = "0.0.0.0/0"
+    }
+    # "app_vpc_route_2" = {
+    #   name             = "vpc-route-2"
+    #   network          = "app_vpc_network_2"
+    #   next_hop_gateway = "default-internet-gateway"
+    #   dest_range       = "0.0.0.0/0"
+    # }
+  }
+}
