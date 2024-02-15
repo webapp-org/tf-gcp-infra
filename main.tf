@@ -35,10 +35,12 @@ resource "google_compute_subnetwork" "app_subnets" {
 }
 
 
-# Add route
-resource "google_compute_route" "app_vpc_route" {
-  name             = "vpc-route"
-  network          = google_compute_network.app_vpcs["app_vpc_network"].self_link
-  next_hop_gateway = "default-internet-gateway"
-  dest_range       = "0.0.0.0/0"
+# Add routes
+resource "google_compute_route" "vpc_routes" {
+  for_each = var.routes
+
+  name             = each.value.name
+  network          = google_compute_network.app_vpcs[each.value.network].self_link
+  next_hop_gateway = each.value.next_hop_gateway
+  dest_range       = each.value.dest_range
 }
