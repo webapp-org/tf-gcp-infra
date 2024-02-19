@@ -31,7 +31,7 @@ resource "google_compute_subnetwork" "app_subnets" {
   name          = each.value.name
   ip_cidr_range = each.value.cidr
   network       = google_compute_network.app_vpcs[each.value.vpc].self_link
-  region        = var.region
+  region        = var.regio
 }
 
 
