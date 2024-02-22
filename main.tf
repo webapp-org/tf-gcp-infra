@@ -1,18 +1,4 @@
-terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "5.15.0"
-    }
-  }
-}
 
-provider "google" {
-  # Configuration options
-  project = var.project_id
-  region  = var.region
-  zone    = var.zone
-}
 
 # Create vpc
 resource "google_compute_network" "app_vpcs" {
@@ -43,4 +29,66 @@ resource "google_compute_route" "vpc_routes" {
   network          = google_compute_network.app_vpcs[each.value.network].self_link
   next_hop_gateway = each.value.next_hop_gateway
   dest_range       = each.value.dest_range
+}
+
+# Add Firewals
+resource "google_compute_firewall" "firewall_rules" {
+  for_each = var.firewall_rules
+
+  name    = each.value.name
+  network = google_compute_network.app_vpcs[each.value.network].self_link
+
+  allow {
+    protocol = each.value.protocol
+    ports    = each.value.ports
+  }
+
+  source_ranges = each.value.source_ranges
+  target_tags   = each.value.target_tags
+}
+
+# Data block to fetch all images from project
+data "google_compute_image" "my_image" {
+  project     = var.project_id
+  filter      = "family:*"
+  most_recent = true
+}
+
+# Adding vm
+resource "google_compute_instance" "webapp-instance" {
+  machine_type              = "e2-medium"
+  name                      = "webapp-instance"
+  allow_stopping_for_update = true
+  zone                      = var.zone
+  tags                      = ["allow-ssh", "allow-8080"]
+  boot_disk {
+    auto_delete = true
+    device_name = "webapp"
+
+    initialize_params {
+      image = data.google_compute_image.my_image.self_link
+      # image = "projects/robust-doodad-412315/global/images/packer-1708390415"
+      size = 100
+      type = "pd-balanced"
+    }
+
+    mode = "READ_WRITE"
+  }
+
+  network_interface {
+    access_config {
+      network_tier = "PREMIUM"
+    }
+    subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
+  }
+
+  depends_on = [google_compute_subnetwork.app_subnets["webapp"]]
+}
+
+
+output "fetched_image_details" {
+  value = {
+    name          = data.google_compute_image.my_image.name
+    creation_time = data.google_compute_image.my_image.creation_timestamp
+  }
 }
