@@ -31,12 +31,13 @@ resource "google_compute_route" "vpc_routes" {
   dest_range       = each.value.dest_range
 }
 
-# Add Firewals
-resource "google_compute_firewall" "firewall_rules" {
-  for_each = var.firewall_rules
+# Create allowed firewall
+resource "google_compute_firewall" "allowed_firewalls" {
+  for_each = var.allow_firewall_rules
 
-  name    = each.value.name
-  network = google_compute_network.app_vpcs[each.value.network].self_link
+  name     = each.value.name
+  network  = google_compute_network.app_vpcs[each.value.network].self_link
+  priority = each.value.priority
 
   allow {
     protocol = each.value.protocol
@@ -44,8 +45,24 @@ resource "google_compute_firewall" "firewall_rules" {
   }
 
   source_ranges = each.value.source_ranges
-  target_tags   = each.value.target_tags
+  target_tags   = [each.value.name]
 }
+
+# Create denied firewall
+resource "google_compute_firewall" "denied_firewalls" {
+  for_each = var.deny_firewall_rules
+
+  name     = each.value.name
+  network  = google_compute_network.app_vpcs[each.value.network].self_link
+  priority = each.value.priority
+
+  deny {
+    protocol = each.value.protocol
+  }
+  source_ranges = each.value.source_ranges
+  target_tags   = [each.value.name]
+}
+
 
 # Data block to fetch all images from project
 data "google_compute_image" "my_image" {
@@ -60,7 +77,7 @@ resource "google_compute_instance" "webapp-instance" {
   name                      = "webapp-instance"
   allow_stopping_for_update = true
   zone                      = var.zone
-  tags                      = ["allow-ssh", "allow-8080"]
+  tags                      = ["deny-all", "allow-8080"]
   boot_disk {
     auto_delete = true
     device_name = "webapp"
