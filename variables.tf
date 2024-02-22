@@ -1,6 +1,6 @@
 variable "project_id" {
   type    = string
-  default = "cloud-app-414419"
+  default = "csye6225-dev-415023"
 }
 
 variable "region" {
@@ -85,5 +85,34 @@ variable "routes" {
     #   next_hop_gateway = "default-internet-gateway"
     #   dest_range       = "0.0.0.0/0"
     # }
+  }
+}
+
+variable "firewall_rules" {
+  type = map(object({
+    name          = string
+    protocol      = string
+    ports         = list(string)
+    target_tags   = list(string)
+    source_ranges = list(string)
+    network       = string
+  }))
+  default = {
+    allow_ssh = {
+      name          = "allow-ssh"
+      protocol      = "tcp"
+      ports         = ["22"]
+      target_tags   = ["allow-ssh"]
+      source_ranges = ["0.0.0.0/0"]
+      network       = "app_vpc_network"
+    },
+    allow_8080 = {
+      name          = "allow-8080"
+      protocol      = "tcp"
+      ports         = ["8080"]
+      target_tags   = ["allow-8080"]
+      source_ranges = ["0.0.0.0/0"]
+      network       = "app_vpc_network"
+    }
   }
 }
