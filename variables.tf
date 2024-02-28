@@ -232,3 +232,34 @@ variable "cloud_sql_database_port" {
   type    = number
   default = 8080
 }
+
+# webapp vm instance
+variable "machine_type" {
+  type    = string
+  default = "e2-medium"
+}
+
+variable "instance_name" {
+  type    = string
+  default = "webapp-instance"
+}
+
+variable "boot_disk_size" {
+  type    = number
+  default = 100
+}
+
+variable "boot_disk_type" {
+  type    = string
+  default = "pd-balanced"
+}
+
+variable "network_tier" {
+  type    = string
+  default = "PREMIUM"
+}
+
+variable "tags" {
+  type    = list(string)
+  default = ["deny-all", "allow-8080"]
+}

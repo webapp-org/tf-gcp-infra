@@ -143,20 +143,20 @@ data "google_compute_image" "my_image" {
 
 # Adding webapp vm instance
 resource "google_compute_instance" "webapp-instance" {
-  machine_type              = "e2-medium"
-  name                      = "webapp-instance"
+  machine_type              = var.machine_type
+  name                      = var.instance_name
   allow_stopping_for_update = true
   zone                      = var.zone
-  tags                      = ["deny-all", "allow-8080"]
+  tags                      = var.tags
+
   boot_disk {
     auto_delete = true
     device_name = "webapp"
 
     initialize_params {
       image = data.google_compute_image.my_image.self_link
-      # image = "projects/robust-doodad-412315/global/images/packer-1708390415"
-      size = 100
-      type = "pd-balanced"
+      size  = var.boot_disk_size
+      type  = var.boot_disk_type
     }
 
     mode = "READ_WRITE"
@@ -164,7 +164,7 @@ resource "google_compute_instance" "webapp-instance" {
 
   network_interface {
     access_config {
-      network_tier = "PREMIUM"
+      network_tier = var.network_tier
     }
     subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
   }
@@ -186,11 +186,12 @@ resource "google_compute_instance" "webapp-instance" {
 
     # Mark script as run by creating a file
     touch /opt/.env_configured
-  EOT
+    EOT
   }
 
   depends_on = [google_compute_subnetwork.app_subnets["webapp"]]
 }
+
 
 output "fetched_image_details" {
   value = {
