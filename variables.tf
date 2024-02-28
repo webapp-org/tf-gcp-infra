@@ -37,20 +37,23 @@ variable "vpcs" {
 
 variable "subnets" {
   type = map(object({
-    name = string
-    cidr = string
-    vpc  = string
+    name                     = string
+    cidr                     = string
+    vpc                      = string
+    private_ip_google_access = bool
   }))
   default = {
     "webapp" = {
-      name = "webapp"
-      cidr = "10.1.0.0/24"
-      vpc  = "app_vpc_network"
+      name                     = "webapp"
+      cidr                     = "10.1.0.0/24"
+      vpc                      = "app_vpc_network"
+      private_ip_google_access = true
     },
     "db" = {
-      name = "db"
-      cidr = "10.2.0.0/24"
-      vpc  = "app_vpc_network"
+      name                     = "db"
+      cidr                     = "10.2.0.0/24"
+      vpc                      = "app_vpc_network"
+      private_ip_google_access = false
     }
     # "webapp-2" = {
     #   name = "webapp-2"
@@ -130,4 +133,102 @@ variable "deny_firewall_rules" {
       priority      = 1000
     }
   }
+}
+
+# global address
+variable "global_address_name" {
+  type    = string
+  default = "private-ip-range"
+}
+
+variable "global_address_purpose" {
+  type    = string
+  default = "VPC_PEERING"
+}
+
+variable "global_address_type" {
+  type    = string
+  default = "INTERNAL"
+}
+
+variable "global_address_prefix_length" {
+  type    = number
+  default = 24
+}
+
+variable "vpc_network_name" {
+  type    = string
+  default = "app_vpc_network"
+}
+
+# global service networking connection
+variable "service_networking_service" {
+  type    = string
+  default = "servicenetworking.googleapis.com"
+}
+
+
+
+# Cloud sql
+variable "cloud_sql_instance_name" {
+  type    = string
+  default = "my-cloud-sql-instance"
+}
+
+variable "cloud_sql_database_version" {
+  type    = string
+  default = "MYSQL_8_0"
+}
+
+variable "cloud_sql_region" {
+  type    = string
+  default = "us-central1"
+}
+
+variable "cloud_sql_tier" {
+  type    = string
+  default = "db-n1-standard-1"
+}
+
+variable "cloud_sql_availability_type" {
+  type    = string
+  default = "REGIONAL"
+}
+
+variable "cloud_sql_disk_type" {
+  type    = string
+  default = "PD_SSD"
+}
+
+variable "cloud_sql_disk_size" {
+  type    = number
+  default = 100
+}
+
+variable "cloud_sql_backup_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "cloud_sql_binary_log_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "cloud_sql_deletion_protection" {
+  type    = bool
+  default = false
+}
+
+variable "cloud_sql_database_name" {
+  type    = string
+  default = "webapp"
+}
+variable "cloud_sql_database_user_name" {
+  type    = string
+  default = "webapp"
+}
+variable "cloud_sql_database_port" {
+  type    = number
+  default = 8080
 }

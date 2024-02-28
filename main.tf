@@ -14,12 +14,83 @@ resource "google_compute_network" "app_vpcs" {
 resource "google_compute_subnetwork" "app_subnets" {
   for_each = var.subnets
 
-  name          = each.value.name
-  ip_cidr_range = each.value.cidr
-  network       = google_compute_network.app_vpcs[each.value.vpc].self_link
-  region        = var.region
+  name                     = each.value.name
+  ip_cidr_range            = each.value.cidr
+  network                  = google_compute_network.app_vpcs[each.value.vpc].self_link
+  region                   = var.region
+  private_ip_google_access = each.value.private_ip_google_access
 }
 
+# Create a global address
+resource "google_compute_global_address" "private_ip_range" {
+  name          = var.global_address_name
+  purpose       = var.global_address_purpose
+  address_type  = var.global_address_type
+  prefix_length = var.global_address_prefix_length
+  network       = google_compute_network.app_vpcs[var.vpc_network_name].self_link
+}
+
+# Create a private vpc connection
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.app_vpcs[var.vpc_network_name].self_link
+  service                 = var.service_networking_service
+  reserved_peering_ranges = [google_compute_global_address.private_ip_range.name]
+
+  depends_on = [
+    google_compute_network.app_vpcs,
+    google_compute_global_address.private_ip_range
+  ]
+}
+
+# Create cloud sql instance
+resource "google_sql_database_instance" "cloud_sql_instance" {
+  name             = var.cloud_sql_instance_name
+  database_version = var.cloud_sql_database_version
+  region           = var.cloud_sql_region
+
+  settings {
+    tier              = var.cloud_sql_tier
+    availability_type = var.cloud_sql_availability_type
+    disk_type         = var.cloud_sql_disk_type
+    disk_size         = var.cloud_sql_disk_size
+
+    ip_configuration {
+      ipv4_enabled    = false
+      private_network = google_compute_network.app_vpcs["app_vpc_network"].self_link
+    }
+
+    backup_configuration {
+      enabled            = var.cloud_sql_backup_enabled
+      binary_log_enabled = var.cloud_sql_binary_log_enabled
+    }
+  }
+
+  deletion_protection = var.cloud_sql_deletion_protection
+
+  depends_on = [
+    google_compute_global_address.private_ip_range,
+    google_service_networking_connection.private_vpc_connection
+  ]
+}
+
+# Create db for sql instance
+resource "google_sql_database" "webapp_db" {
+  name     = var.cloud_sql_database_name
+  instance = google_sql_database_instance.cloud_sql_instance.name
+}
+
+# Generate password for sql instance
+resource "random_password" "webapp_db_user_password" {
+  length  = 16
+  special = true
+}
+
+# Create user for webapp db
+resource "google_sql_user" "webapp_db_user" {
+  name     = var.cloud_sql_database_user_name
+  instance = google_sql_database_instance.cloud_sql_instance.name
+  password = random_password.webapp_db_user_password.result
+}
 
 # Add routes
 resource "google_compute_route" "vpc_routes" {
@@ -63,7 +134,6 @@ resource "google_compute_firewall" "denied_firewalls" {
   target_tags   = [each.value.name]
 }
 
-
 # Data block to fetch all images from project
 data "google_compute_image" "my_image" {
   project     = var.project_id
@@ -71,7 +141,7 @@ data "google_compute_image" "my_image" {
   most_recent = true
 }
 
-# Adding vm
+# Adding webapp vm instance
 resource "google_compute_instance" "webapp-instance" {
   machine_type              = "e2-medium"
   name                      = "webapp-instance"
@@ -99,9 +169,28 @@ resource "google_compute_instance" "webapp-instance" {
     subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
   }
 
+  metadata = {
+    startup-script = <<-EOT
+    #!/bin/bash
+    # Check if the script has already run
+    if [ -f "/opt/.env_configured" ]; then
+      exit 0
+    fi
+
+    # Populate the .env file
+    echo "DATABASE=${var.cloud_sql_database_name}" > /opt/webapp/.env
+    echo "USERNAME=${var.cloud_sql_database_user_name}" >> /opt/webapp/.env
+    echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
+    echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
+    echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
+
+    # Mark script as run by creating a file
+    touch /opt/.env_configured
+  EOT
+  }
+
   depends_on = [google_compute_subnetwork.app_subnets["webapp"]]
 }
-
 
 output "fetched_image_details" {
   value = {
