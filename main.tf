@@ -1,3 +1,23 @@
+# Creating a service account which will be attached to the webapp instance for logging
+resource "google_service_account" "logging_service_account" {
+  account_id   = var.service_account_id
+  display_name = var.service_account_display_name
+}
+
+# Bind IAM Roles to the service account
+# Logging Admin role
+resource "google_project_iam_member" "logging_admin" {
+  project = var.project_id
+  role    = var.logging_admin_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
+
+# Monitoring Metric Writer role
+resource "google_project_iam_member" "metric_writer" {
+  project = var.project_id
+  role    = var.metric_writer_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
 
 
 # Create vpc
@@ -82,7 +102,7 @@ resource "google_sql_database" "webapp_db" {
 # Generate password for sql instance
 resource "random_password" "webapp_db_user_password" {
   length  = 16
-  special = true
+  special = false
 }
 
 # Create user for webapp db
@@ -169,6 +189,11 @@ resource "google_compute_instance" "webapp-instance" {
     subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
   }
 
+  service_account {
+    email  = google_service_account.logging_service_account.email
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+
   metadata = {
     startup-script = <<-EOT
     #!/bin/bash
@@ -183,6 +208,7 @@ resource "google_compute_instance" "webapp-instance" {
     echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
     echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
     echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
+    echo "ENV=prod" >> /opt/webapp/.env
 
     # Mark script as run by creating a file
     touch /opt/.env_configured
@@ -193,9 +219,16 @@ resource "google_compute_instance" "webapp-instance" {
 }
 
 
-output "fetched_image_details" {
-  value = {
-    name          = data.google_compute_image.my_image.name
-    creation_time = data.google_compute_image.my_image.creation_timestamp
-  }
+# Data block to fetch cloud dns zone configured in GCP
+data "google_dns_managed_zone" "webapp_zone" {
+  name = var.dns_managed_zone_name
+}
+
+# Create A record for webapp instance
+resource "google_dns_record_set" "webapp_a_record" {
+  name         = "${var.domain_name}."
+  type         = "A"
+  ttl          = var.a_record_ttl
+  managed_zone = data.google_dns_managed_zone.webapp_zone.name
+  rrdatas      = [google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip]
 }
