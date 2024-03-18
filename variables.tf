@@ -263,3 +263,36 @@ variable "tags" {
   type    = list(string)
   default = ["deny-all", "allow-8080"]
 }
+
+# DNS and A record
+variable "dns_managed_zone_name" {
+  type    = string
+  default = "cloud-webapp-zone"
+}
+
+variable "domain_name" {
+  type    = string
+  default = "chinmaygulhane.me"
+}
+
+variable "a_record_ttl" {
+  type    = number
+  default = 300
+}
+
+# Service account
+variable "service_account_id" {
+  default = "vm-logging-service-account"
+}
+
+variable "service_account_display_name" {
+  default = "VM logging service account"
+}
+
+variable "logging_admin_role" {
+  default = "roles/logging.admin"
+}
+
+variable "metric_writer_role" {
+  default = "roles/monitoring.metricWriter"
+}
