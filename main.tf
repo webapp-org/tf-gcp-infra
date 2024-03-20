@@ -215,7 +215,10 @@ resource "google_compute_instance" "webapp-instance" {
     EOT
   }
 
-  depends_on = [google_compute_subnetwork.app_subnets["webapp"]]
+  depends_on = [
+    google_service_account.logging_service_account,
+    google_compute_subnetwork.app_subnets["webapp"]
+  ]
 }
 
 
