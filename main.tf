@@ -19,6 +19,19 @@ resource "google_project_iam_member" "metric_writer" {
   member  = "serviceAccount:${google_service_account.logging_service_account.email}"
 }
 
+# Pub/Sub Publisher role
+resource "google_project_iam_member" "pubsub_editor" {
+  project = var.project_id
+  role    = var.pubsub_editor_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
+
+# Token creator role
+resource "google_project_iam_member" "pubsub_sa_token_creator" {
+  project = var.project_id
+  role    = var.token_creator_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
 
 # Create vpc
 resource "google_compute_network" "app_vpcs" {
@@ -208,8 +221,9 @@ resource "google_compute_instance" "webapp-instance" {
     echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
     echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
     echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
+    echo "DOMAIN_NAME=${var.domain_name}" >> /opt/webapp/.env
     echo "ENV=prod" >> /opt/webapp/.env
-
+    echo "PUBSUB_TOPIC_NAME=${google_pubsub_topic.pubsub_topic.name}" >> /opt/webapp/.env
     # Mark script as run by creating a file
     touch /opt/.env_configured
     EOT
@@ -220,6 +234,88 @@ resource "google_compute_instance" "webapp-instance" {
     google_compute_subnetwork.app_subnets["webapp"]
   ]
 }
+
+# Create a Google Cloud Storage Bucket for the Function Code
+resource "random_id" "bucket_suffix" {
+  byte_length = var.bucket_suffix_byte_length
+}
+
+resource "google_storage_bucket" "function_code_bucket" {
+  name          = "${var.function_code_bucket_name_prefix}-${random_id.bucket_suffix.hex}"
+  location      = var.function_code_bucket_location
+  force_destroy = true
+}
+
+resource "google_storage_bucket_object" "function_code" {
+  name   = var.function_code_file_name
+  bucket = google_storage_bucket.function_code_bucket.name
+  source = var.function_code_file_name
+}
+
+# VPC connector 
+resource "google_vpc_access_connector" "webapp_connector" {
+  name          = var.vpc_connector_name
+  region        = var.region
+  network       = google_compute_network.app_vpcs["app_vpc_network"].id
+  ip_cidr_range = var.vpc_connector_ip_cidr_range
+}
+
+# Setup Google Cloud Pub/Sub Topic and Subscription
+resource "google_pubsub_topic" "pubsub_topic" {
+  name                       = var.pubsub_topic_name
+  message_retention_duration = var.pubsub_topic_retention_duration
+}
+
+resource "google_pubsub_subscription" "pubsub_subscription" {
+  name                 = var.pubsub_subscription_name
+  topic                = google_pubsub_topic.pubsub_topic.name
+  ack_deadline_seconds = var.pubsub_ack_deadline_seconds
+}
+
+resource "google_cloudfunctions2_function" "webapp_email_function" {
+  name        = var.cloud_function_name
+  description = var.cloud_function_description
+  location    = var.region
+
+  build_config {
+    entry_point = var.cloud_function_entry_point
+    runtime     = var.cloud_function_runtime
+
+    source {
+      storage_source {
+        bucket = google_storage_bucket.function_code_bucket.name
+        object = google_storage_bucket_object.function_code.name
+      }
+    }
+  }
+
+  service_config {
+    available_memory              = var.cloud_function_available_memory
+    available_cpu                 = var.cloud_function_available_cpu
+    timeout_seconds               = var.cloud_function_timeout_seconds
+    max_instance_count            = var.cloud_function_max_instance_count
+    vpc_connector                 = google_vpc_access_connector.webapp_connector.id
+    vpc_connector_egress_settings = var.cloud_function_vpc_connector_egress_settings
+    service_account_email         = google_service_account.logging_service_account.email
+    environment_variables = {
+      MAILGUN_API_KEY      = var.mailgun_api_key
+      DATABASE             = var.cloud_sql_database_name
+      USERNAME             = var.cloud_sql_database_user_name
+      PASSWORD             = random_password.webapp_db_user_password.result
+      HOST                 = google_sql_database_instance.cloud_sql_instance.private_ip_address
+      DATABASE_PORT        = var.cloud_sql_database_port
+      MAILGUN_SENDER_EMAIL = var.mailgun_sender_email
+      MAILGUN_DOMAIN       = var.mailgun_domain
+    }
+  }
+
+  event_trigger {
+    event_type   = var.cloud_function_event_type
+    pubsub_topic = google_pubsub_topic.pubsub_topic.id
+    retry_policy = var.cloud_function_retry_policy
+  }
+}
+
 
 
 # Data block to fetch cloud dns zone configured in GCP
