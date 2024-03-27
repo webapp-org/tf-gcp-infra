@@ -296,3 +296,113 @@ variable "logging_admin_role" {
 variable "metric_writer_role" {
   default = "roles/monitoring.metricWriter"
 }
+
+variable "pubsub_editor_role" {
+  type    = string
+  default = "roles/pubsub.editor"
+}
+
+variable "token_creator_role" {
+  type    = string
+  default = "roles/iam.serviceAccountTokenCreator"
+}
+
+# Google cloud storage for function
+variable "function_code_bucket_name_prefix" {
+  default = "webapp-send-email-function-code-bucket"
+}
+
+variable "function_code_bucket_location" {
+  default = "US"
+}
+
+variable "bucket_suffix_byte_length" {
+  default = 2
+}
+
+variable "function_code_file_name" {
+  default = "serverless-main.zip"
+}
+
+
+# VPC connector
+variable "vpc_connector_name" {
+  default = "webapp-vpc-connector"
+}
+
+variable "vpc_connector_ip_cidr_range" {
+  default = "10.8.0.0/28"
+}
+
+# pub/sub topic and name
+variable "pubsub_topic_name" {
+  default = "webapp-email-topic"
+}
+
+variable "pubsub_topic_retention_duration" {
+  default = "604800s" # 7 days
+}
+
+variable "pubsub_subscription_name" {
+  default = "webapp-email-subscription"
+}
+
+variable "pubsub_ack_deadline_seconds" {
+  default = 20
+}
+
+# cloud function
+variable "cloud_function_name" {
+  default = "webapp_email_function"
+}
+
+variable "cloud_function_description" {
+  default = "Cloud Webapp Email Function"
+}
+
+variable "cloud_function_entry_point" {
+  default = "sendEmail"
+}
+
+variable "cloud_function_runtime" {
+  default = "nodejs20"
+}
+
+variable "cloud_function_available_memory" {
+  default = "128Mi"
+}
+variable "cloud_function_available_cpu" {
+  default = "1"
+}
+
+variable "cloud_function_timeout_seconds" {
+  default = 540
+}
+
+variable "cloud_function_max_instance_count" {
+  default = 1
+}
+
+variable "cloud_function_vpc_connector_egress_settings" {
+  default = "PRIVATE_RANGES_ONLY"
+}
+
+variable "mailgun_api_key" {
+  default = "20e98bda0732db1d6bc0220a4de06b97-309b0ef4-c6f3b875"
+}
+
+variable "mailgun_sender_email" {
+  default = "Cloud Webapp <mailgun@mail.chinmaygulhane.me>"
+}
+
+variable "mailgun_domain" {
+  default = "mail.chinmaygulhane.me"
+}
+
+variable "cloud_function_event_type" {
+  default = "google.cloud.pubsub.topic.v1.messagePublished"
+}
+
+variable "cloud_function_retry_policy" {
+  default = "RETRY_POLICY_RETRY"
+}
