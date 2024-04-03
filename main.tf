@@ -314,6 +314,7 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
     pubsub_topic          = google_pubsub_topic.pubsub_topic.id
     retry_policy          = var.cloud_function_retry_policy
     service_account_email = google_service_account.logging_service_account.email
+    trigger_region        = var.region
   }
 }
 
