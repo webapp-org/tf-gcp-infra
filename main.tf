@@ -175,65 +175,65 @@ data "google_compute_image" "my_image" {
 }
 
 # Adding webapp vm instance
-resource "google_compute_instance" "webapp-instance" {
-  machine_type              = var.machine_type
-  name                      = var.instance_name
-  allow_stopping_for_update = true
-  zone                      = var.zone
-  tags                      = var.tags
+# resource "google_compute_instance" "webapp-instance" {
+#   machine_type              = var.machine_type
+#   name                      = var.instance_name
+#   allow_stopping_for_update = true
+#   zone                      = var.zone
+#   tags                      = var.tags
 
-  boot_disk {
-    auto_delete = true
-    device_name = "webapp"
+#   boot_disk {
+#     auto_delete = true
+#     device_name = "webapp"
 
-    initialize_params {
-      image = data.google_compute_image.my_image.self_link
-      size  = var.boot_disk_size
-      type  = var.boot_disk_type
-    }
+#     initialize_params {
+#       image = data.google_compute_image.my_image.self_link
+#       size  = var.boot_disk_size
+#       type  = var.boot_disk_type
+#     }
 
-    mode = "READ_WRITE"
-  }
+#     mode = "READ_WRITE"
+#   }
 
-  network_interface {
-    access_config {
-      network_tier = var.network_tier
-    }
-    subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
-  }
+#   network_interface {
+#     access_config {
+#       network_tier = var.network_tier
+#     }
+#     subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
+#   }
 
-  service_account {
-    email  = google_service_account.logging_service_account.email
-    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-  }
+#   service_account {
+#     email  = google_service_account.logging_service_account.email
+#     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+#   }
 
-  metadata = {
-    startup-script = <<-EOT
-    #!/bin/bash
-    # Check if the script has already run
-    if [ -f "/opt/.env_configured" ]; then
-      exit 0
-    fi
+#   metadata = {
+#     startup-script = <<-EOT
+#     #!/bin/bash
+#     # Check if the script has already run
+#     if [ -f "/opt/.env_configured" ]; then
+#       exit 0
+#     fi
 
-    # Populate the .env file
-    echo "DATABASE=${var.cloud_sql_database_name}" > /opt/webapp/.env
-    echo "USERNAME=${var.cloud_sql_database_user_name}" >> /opt/webapp/.env
-    echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
-    echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
-    echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
-    echo "DOMAIN_NAME=${var.domain_name}" >> /opt/webapp/.env
-    echo "ENV=prod" >> /opt/webapp/.env
-    echo "PUBSUB_TOPIC_NAME=${google_pubsub_topic.pubsub_topic.name}" >> /opt/webapp/.env
-    # Mark script as run by creating a file
-    touch /opt/.env_configured
-    EOT
-  }
+#     # Populate the .env file
+#     echo "DATABASE=${var.cloud_sql_database_name}" > /opt/webapp/.env
+#     echo "USERNAME=${var.cloud_sql_database_user_name}" >> /opt/webapp/.env
+#     echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
+#     echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
+#     echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
+#     echo "DOMAIN_NAME=${var.domain_name}" >> /opt/webapp/.env
+#     echo "ENV=prod" >> /opt/webapp/.env
+#     echo "PUBSUB_TOPIC_NAME=${google_pubsub_topic.pubsub_topic.name}" >> /opt/webapp/.env
+#     # Mark script as run by creating a file
+#     touch /opt/.env_configured
+#     EOT
+#   }
 
-  depends_on = [
-    google_service_account.logging_service_account,
-    google_compute_subnetwork.app_subnets["webapp"]
-  ]
-}
+#   depends_on = [
+#     google_service_account.logging_service_account,
+#     google_compute_subnetwork.app_subnets["webapp"]
+#   ]
+# }
 
 # Create a Google Cloud Storage Bucket for the Function Code
 resource "random_id" "bucket_suffix" {
@@ -310,9 +310,10 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
   }
 
   event_trigger {
-    event_type   = var.cloud_function_event_type
-    pubsub_topic = google_pubsub_topic.pubsub_topic.id
-    retry_policy = var.cloud_function_retry_policy
+    event_type            = var.cloud_function_event_type
+    pubsub_topic          = google_pubsub_topic.pubsub_topic.id
+    retry_policy          = var.cloud_function_retry_policy
+    service_account_email = google_service_account.logging_service_account.email
   }
 }
 
@@ -324,10 +325,187 @@ data "google_dns_managed_zone" "webapp_zone" {
 }
 
 # Create A record for webapp instance
+# resource "google_dns_record_set" "webapp_a_record" {
+#   name         = "${var.domain_name}."
+#   type         = "A"
+#   ttl          = var.a_record_ttl
+#   managed_zone = data.google_dns_managed_zone.webapp_zone.name
+#   rrdatas      = [google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip]
+# }
+
+#  Instance template
+resource "google_compute_region_instance_template" "webapp_instance_template" {
+  name_prefix  = "webapp-instance-template-"
+  machine_type = var.machine_type
+  region       = var.region
+
+  disk {
+    source_image = data.google_compute_image.my_image.self_link
+    auto_delete  = true
+    boot         = true
+    disk_size_gb = var.boot_disk_size
+    disk_type    = var.boot_disk_type
+  }
+
+  network_interface {
+    network    = google_compute_network.app_vpcs[var.vpc_network_name].self_link
+    subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
+    access_config {
+    }
+  }
+
+  service_account {
+    email  = google_service_account.logging_service_account.email
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+
+  tags = var.tags
+
+  metadata = {
+    startup-script = <<-EOT
+      #!/bin/bash
+      # Check if the script has already run
+      if [ -f "/opt/.env_configured" ]; then
+        exit 0
+      fi
+      # Populate the .env file
+      echo "DATABASE=${var.cloud_sql_database_name}" > /opt/webapp/.env
+      echo "USERNAME=${var.cloud_sql_database_user_name}" >> /opt/webapp/.env
+      echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
+      echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
+      echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
+      echo "DOMAIN_NAME=${var.domain_name}" >> /opt/webapp/.env
+      echo "ENV=prod" >> /opt/webapp/.env
+      echo "PUBSUB_TOPIC_NAME=${google_pubsub_topic.pubsub_topic.name}" >> /opt/webapp/.env
+      # Mark script as run by creating a file
+      touch /opt/.env_configured
+    EOT
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_compute_region_health_check" "regional_health_check" {
+  name   = "regional-health-check"
+  region = var.region
+
+  http_health_check {
+    port         = 8080
+    request_path = "/healthz"
+  }
+
+  timeout_sec         = 5
+  check_interval_sec  = 5
+  unhealthy_threshold = 3
+  healthy_threshold   = 2
+}
+
+
+resource "google_compute_region_instance_group_manager" "webapp_mig" {
+  name               = "webapp-region-mig"
+  region             = var.region
+  base_instance_name = "webapp-instance"
+
+  version {
+    name              = "primary"
+    instance_template = google_compute_region_instance_template.webapp_instance_template.id
+  }
+
+  named_port {
+    name = "http"
+    port = 8080
+  }
+
+  distribution_policy_zones = [
+    "us-east1-b",
+    "us-east1-c",
+    "us-east1-d",
+  ]
+
+  auto_healing_policies {
+    health_check      = google_compute_region_health_check.regional_health_check.self_link
+    initial_delay_sec = 180
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_compute_region_autoscaler" "webapp_autoscaler" {
+  name   = "webapp-autoscaler"
+  target = google_compute_region_instance_group_manager.webapp_mig.id
+  region = var.region
+
+  autoscaling_policy {
+    max_replicas    = 6
+    min_replicas    = 3
+    cooldown_period = 60
+
+    cpu_utilization {
+      target = 0.20
+    }
+  }
+}
+
+# Load balancer
+module "gce-lb-http" {
+  source                = "terraform-google-modules/lb-http/google"
+  version               = "~> 10.0"
+  project               = var.project_id
+  name                  = "webapp-lb"
+  target_tags           = ["webapp-lb"]
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+
+  ssl                             = true
+  managed_ssl_certificate_domains = ["chinmaygulhane.me"]
+  http_forward                    = false
+
+
+  network = google_compute_network.app_vpcs["app_vpc_network"].name
+
+  backends = {
+    default = {
+      description = "Webapp backend"
+      protocol    = "HTTP"
+      port_name   = "http"
+      timeout_sec = 10
+      enable_cdn  = false
+
+      log_config = {
+        enable      = true
+        sample_rate = 1.0
+      }
+
+      health_check = {
+        check_interval_sec  = 10,
+        timeout_sec         = 5,
+        healthy_threshold   = 2,
+        unhealthy_threshold = 3,
+        request_path        = "/healthz",
+        port                = 8080
+      },
+
+      groups = [
+        {
+          group = google_compute_region_instance_group_manager.webapp_mig.instance_group
+        }
+      ]
+
+      iap_config = {
+        enable = false
+      }
+    }
+  }
+}
+
+# Update the DNS A record to point to the load balancer's IP address
 resource "google_dns_record_set" "webapp_a_record" {
   name         = "${var.domain_name}."
   type         = "A"
   ttl          = var.a_record_ttl
   managed_zone = data.google_dns_managed_zone.webapp_zone.name
-  rrdatas      = [google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip]
+  rrdatas      = [module.gce-lb-http.external_ip]
 }
