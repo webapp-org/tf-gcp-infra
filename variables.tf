@@ -5,11 +5,11 @@ variable "project_id" {
 
 variable "region" {
   type    = string
-  default = "us-central1"
+  default = "us-east1"
 }
 variable "zone" {
   type    = string
-  default = "us-central1-c"
+  default = "us-east1-b"
 }
 
 variable "vpcs" {
@@ -106,10 +106,18 @@ variable "allow_firewall_rules" {
       name          = "allow-8080"
       protocol      = "tcp"
       ports         = ["8080"]
-      source_ranges = ["0.0.0.0/0"]
+      source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
       network       = "app_vpc_network"
       priority      = 999
     }
+    # allow_ssh = {
+    #   name          = "allow-ssh"
+    #   protocol      = "tcp"
+    #   ports         = ["22"]
+    #   source_ranges = ["0.0.0.0/0"]
+    #   network       = "app_vpc_network"
+    #   priority      = 999
+    # }
   }
 }
 
@@ -130,7 +138,7 @@ variable "deny_firewall_rules" {
       ports         = []
       source_ranges = ["0.0.0.0/0"]
       network       = "app_vpc_network"
-      priority      = 1000
+      priority      = 1100
     }
   }
 }
@@ -182,7 +190,7 @@ variable "cloud_sql_database_version" {
 
 variable "cloud_sql_region" {
   type    = string
-  default = "us-central1"
+  default = "us-east1"
 }
 
 variable "cloud_sql_tier" {
