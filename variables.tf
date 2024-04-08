@@ -653,11 +653,6 @@ variable "prevent_destroy_key" {
   default = false
 }
 
-variable "project_id" {
-  type    = string
-  default = "your-project-id"
-}
-
 variable "kms_role" {
   type    = string
   default = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
