@@ -33,6 +33,42 @@ resource "google_project_iam_member" "pubsub_sa_token_creator" {
   member  = "serviceAccount:${google_service_account.logging_service_account.email}"
 }
 
+resource "random_id" "key_ring_suffix" {
+  byte_length = var.key_ring_suffix_byte_length
+}
+
+resource "google_kms_key_ring" "key_ring" {
+  name     = "webapp-key-ring-${random_id.key_ring_suffix.hex}"
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "vm_key" {
+  name            = var.key_name_vm
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = var.rotation_period
+  lifecycle {
+    prevent_destroy = var.prevent_destroy
+  }
+}
+
+resource "google_kms_crypto_key" "cloudsql_key" {
+  name            = var.key_name_cloudsql
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = var.rotation_period
+  lifecycle {
+    prevent_destroy = var.prevent_destroy
+  }
+}
+
+resource "google_kms_crypto_key" "gcs_key" {
+  name            = var.key_name_gcs
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = var.rotation_period
+  lifecycle {
+    prevent_destroy = var.prevent_destroy
+  }
+}
+
 # Create vpc
 resource "google_compute_network" "app_vpcs" {
   for_each = var.vpcs

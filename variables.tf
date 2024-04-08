@@ -210,7 +210,7 @@ variable "cloud_sql_disk_type" {
 
 variable "cloud_sql_disk_size" {
   type    = number
-  default = 100
+  default = 50
 }
 
 variable "cloud_sql_backup_enabled" {
@@ -254,7 +254,7 @@ variable "instance_name" {
 
 variable "boot_disk_size" {
   type    = number
-  default = 100
+  default = 50
 }
 
 variable "boot_disk_type" {
@@ -315,13 +315,21 @@ variable "token_creator_role" {
   default = "roles/iam.serviceAccountTokenCreator"
 }
 
+variable "cloudfunction_invoker_role" {
+  default = "roles/cloudfunctions.invoker"
+}
+
+variable "cloudfunction_run_invoker_role" {
+  default = "roles/run.invoker"
+}
+
 # Google cloud storage for function
 variable "function_code_bucket_name_prefix" {
   default = "webapp-send-email-function-code-bucket"
 }
 
 variable "function_code_bucket_location" {
-  default = "US"
+  default = "us-east1"
 }
 
 variable "bucket_suffix_byte_length" {
@@ -413,4 +421,249 @@ variable "cloud_function_event_type" {
 
 variable "cloud_function_retry_policy" {
   default = "RETRY_POLICY_RETRY"
+}
+
+variable "instance_name_prefix" {
+  type    = string
+  default = "webapp-instance-template-"
+}
+
+# Health check 
+variable "health_check_name" {
+  type    = string
+  default = "regional-health-check"
+}
+
+variable "http_port" {
+  type    = number
+  default = 8080
+}
+
+variable "request_path" {
+  type    = string
+  default = "/healthz"
+}
+
+variable "timeout_sec" {
+  type    = number
+  default = 5
+}
+
+variable "check_interval_sec" {
+  type    = number
+  default = 5
+}
+
+variable "unhealthy_threshold" {
+  type    = number
+  default = 3
+}
+
+variable "healthy_threshold" {
+  type    = number
+  default = 2
+}
+
+# MIG
+variable "mig_name" {
+  type    = string
+  default = "webapp-region-mig"
+}
+
+variable "base_instance_name" {
+  type    = string
+  default = "webapp-instance"
+}
+
+variable "named_port_name" {
+  type    = string
+  default = "http"
+}
+
+variable "named_port_port" {
+  type    = number
+  default = 8080
+}
+
+variable "distribution_policy_zones" {
+  type    = list(string)
+  default = ["us-east1-b", "us-east1-c", "us-east1-d"]
+}
+
+variable "auto_healing_initial_delay_sec" {
+  type    = number
+  default = 180
+}
+
+# Autoscaler
+variable "autoscaler_name" {
+  type    = string
+  default = "webapp-autoscaler"
+}
+
+variable "autoscaler_max_replicas" {
+  type    = number
+  default = 6
+}
+
+variable "autoscaler_min_replicas" {
+  type    = number
+  default = 3
+}
+
+variable "autoscaler_cooldown_period" {
+  type    = number
+  default = 120
+}
+
+variable "cpu_utilization_target" {
+  type    = number
+  default = 0.05
+}
+
+# Load Balancer
+variable "lb_name" {
+  type    = string
+  default = "webapp-lb"
+}
+
+variable "lb_target_tags" {
+  type    = list(string)
+  default = ["webapp-lb"]
+}
+
+variable "lb_load_balancing_scheme" {
+  type    = string
+  default = "EXTERNAL_MANAGED"
+}
+
+variable "ssl_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "managed_ssl_certificate_domains" {
+  type    = list(string)
+  default = ["chinmaygulhane.me"]
+}
+
+variable "http_forward_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "backend_description" {
+  type    = string
+  default = "Webapp backend"
+}
+
+variable "backend_protocol" {
+  type    = string
+  default = "HTTP"
+}
+
+variable "backend_port_name" {
+  type    = string
+  default = "http"
+}
+
+variable "backend_timeout_sec" {
+  type    = number
+  default = 10
+}
+
+variable "backend_enable_cdn" {
+  type    = bool
+  default = false
+}
+
+variable "backend_log_enable" {
+  type    = bool
+  default = true
+}
+
+variable "backend_log_sample_rate" {
+  type    = number
+  default = 1.0
+}
+
+variable "health_check_check_interval_sec" {
+  type    = number
+  default = 10
+}
+
+variable "health_check_timeout_sec" {
+  type    = number
+  default = 5
+}
+
+variable "health_check_healthy_threshold" {
+  type    = number
+  default = 2
+}
+
+variable "health_check_unhealthy_threshold" {
+  type    = number
+  default = 3
+}
+
+variable "health_check_request_path" {
+  type    = string
+  default = "/healthz"
+}
+
+variable "health_check_port" {
+  type    = number
+  default = 8080
+}
+
+variable "iap_enable" {
+  type    = bool
+  default = false
+}
+
+# encryption keys
+variable "key_ring_suffix_byte_length" {
+  type    = number
+  default = 4
+}
+
+variable "key_name_vm" {
+  type    = string
+  default = "my-vm-key"
+}
+
+variable "key_name_cloudsql" {
+  type    = string
+  default = "my-cloudsql-key"
+}
+
+variable "key_name_gcs" {
+  type    = string
+  default = "my-gcs-key"
+}
+
+variable "rotation_period" {
+  type    = string
+  default = "2592000s"
+}
+
+variable "prevent_destroy_key" {
+  type    = bool
+  default = false
+}
+
+variable "project_id" {
+  type    = string
+  default = "your-project-id"
+}
+
+variable "kms_role" {
+  type    = string
+  default = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+}
+
+variable "kms_service_account" {
+  type    = string
+  default = "serviceAccount:service-613119375348@compute-system.iam.gserviceaccount.com"
 }
