@@ -61,7 +61,7 @@ resource "google_kms_crypto_key" "vm_key" {
   key_ring        = google_kms_key_ring.key_ring.id
   rotation_period = var.rotation_period
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -70,7 +70,7 @@ resource "google_kms_crypto_key" "cloudsql_key" {
   key_ring        = google_kms_key_ring.key_ring.id
   rotation_period = var.rotation_period
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -79,7 +79,7 @@ resource "google_kms_crypto_key" "gcs_key" {
   key_ring        = google_kms_key_ring.key_ring.id
   rotation_period = var.rotation_period
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -133,7 +133,7 @@ resource "google_project_service_identity" "gcp_sa_cloud_sql" {
 
 resource "google_project_iam_member" "cloud_sql_sa_kms_role" {
   project = var.project_id
-  role    = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  role    = var.kms_role
   member  = "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
 }
 
@@ -302,10 +302,29 @@ resource "random_id" "bucket_suffix" {
   byte_length = var.bucket_suffix_byte_length
 }
 
+data "google_storage_project_service_account" "gcs_account" {
+  project = var.project_id
+}
+
+resource "google_kms_crypto_key_iam_binding" "bucket_crypto_key_iam" {
+  provider      = google-beta
+  crypto_key_id = google_kms_crypto_key.gcs_key.id
+  role          = var.kms_role
+  members = [
+    "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"
+  ]
+}
+
 resource "google_storage_bucket" "function_code_bucket" {
   name          = "${var.function_code_bucket_name_prefix}-${random_id.bucket_suffix.hex}"
   location      = var.function_code_bucket_location
   force_destroy = true
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.gcs_key.id
+  }
+  depends_on = [
+    google_kms_crypto_key_iam_binding.bucket_crypto_key_iam
+  ]
 }
 
 resource "google_storage_bucket_object" "function_code" {
@@ -396,6 +415,13 @@ data "google_dns_managed_zone" "webapp_zone" {
 #   rrdatas      = [google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip]
 # }
 
+#  Assignment 8 
+resource "google_project_iam_member" "kms_role_to_compute_service_account" {
+  project = var.project_id
+  role    = var.kms_role
+  member  = var.kms_service_account
+}
+
 #  Instance template
 resource "google_compute_region_instance_template" "webapp_instance_template" {
   name_prefix  = var.instance_name_prefix
@@ -408,6 +434,9 @@ resource "google_compute_region_instance_template" "webapp_instance_template" {
     boot         = true
     disk_size_gb = var.boot_disk_size
     disk_type    = var.boot_disk_type
+    disk_encryption_key {
+      kms_key_self_link = google_kms_crypto_key.vm_key.id
+    }
   }
 
   network_interface {
