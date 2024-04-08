@@ -11,3 +11,9 @@
 # Apis that need to be enabled 
 
 1. Compute Engine API
+2. Cloud Logging API
+3. Compute Engine API
+4. Cloud Monitoring API
+5. Cloud Functions API
+6. Cloud Pub/Sub API
+7. Serverless VPC Access API

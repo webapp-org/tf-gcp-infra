@@ -33,6 +33,20 @@ resource "google_project_iam_member" "pubsub_sa_token_creator" {
   member  = "serviceAccount:${google_service_account.logging_service_account.email}"
 }
 
+# Cloud Functions Invoker Role
+resource "google_project_iam_member" "cloud_functions_invoker" {
+  project = var.project_id
+  role    = var.cloudfunction_invoker_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
+
+# Cloud Run Invoker Role
+resource "google_project_iam_member" "cloud_run_invoker" {
+  project = var.project_id
+  role    = var.cloudfunction_run_invoker_role
+  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+}
+
 resource "random_id" "key_ring_suffix" {
   byte_length = var.key_ring_suffix_byte_length
 }
@@ -111,18 +125,30 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   ]
 }
 
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  project  = var.project_id
+  provider = google-beta
+  service  = "sqladmin.googleapis.com"
+}
+
+resource "google_project_iam_member" "cloud_sql_sa_kms_role" {
+  project = var.project_id
+  role    = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member  = "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
+}
+
 # Create cloud sql instance
 resource "google_sql_database_instance" "cloud_sql_instance" {
-  name             = var.cloud_sql_instance_name
-  database_version = var.cloud_sql_database_version
-  region           = var.cloud_sql_region
+  name                = var.cloud_sql_instance_name
+  database_version    = var.cloud_sql_database_version
+  region              = var.cloud_sql_region
+  encryption_key_name = google_kms_crypto_key.cloudsql_key.id
 
   settings {
     tier              = var.cloud_sql_tier
     availability_type = var.cloud_sql_availability_type
     disk_type         = var.cloud_sql_disk_type
     disk_size         = var.cloud_sql_disk_size
-
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.app_vpcs["app_vpc_network"].self_link
@@ -372,7 +398,7 @@ data "google_dns_managed_zone" "webapp_zone" {
 
 #  Instance template
 resource "google_compute_region_instance_template" "webapp_instance_template" {
-  name_prefix  = "webapp-instance-template-"
+  name_prefix  = var.instance_name_prefix
   machine_type = var.machine_type
   region       = var.region
 
@@ -424,26 +450,27 @@ resource "google_compute_region_instance_template" "webapp_instance_template" {
   }
 }
 
+# Regional Health check
 resource "google_compute_region_health_check" "regional_health_check" {
-  name   = "regional-health-check"
+  name   = var.health_check_name
   region = var.region
 
   http_health_check {
-    port         = 8080
-    request_path = "/healthz"
+    port         = var.http_port
+    request_path = var.request_path
   }
 
-  timeout_sec         = 5
-  check_interval_sec  = 5
-  unhealthy_threshold = 3
-  healthy_threshold   = 2
+  timeout_sec         = var.timeout_sec
+  check_interval_sec  = var.check_interval_sec
+  unhealthy_threshold = var.unhealthy_threshold
+  healthy_threshold   = var.healthy_threshold
 }
 
-
+# Manage Instance Groups
 resource "google_compute_region_instance_group_manager" "webapp_mig" {
-  name               = "webapp-region-mig"
+  name               = var.mig_name
   region             = var.region
-  base_instance_name = "webapp-instance"
+  base_instance_name = var.base_instance_name
 
   version {
     name              = "primary"
@@ -451,19 +478,15 @@ resource "google_compute_region_instance_group_manager" "webapp_mig" {
   }
 
   named_port {
-    name = "http"
-    port = 8080
+    name = var.named_port_name
+    port = var.named_port_port
   }
 
-  distribution_policy_zones = [
-    "us-east1-b",
-    "us-east1-c",
-    "us-east1-d",
-  ]
+  distribution_policy_zones = var.distribution_policy_zones
 
   auto_healing_policies {
     health_check      = google_compute_region_health_check.regional_health_check.self_link
-    initial_delay_sec = 180
+    initial_delay_sec = var.auto_healing_initial_delay_sec
   }
 
   lifecycle {
@@ -471,18 +494,19 @@ resource "google_compute_region_instance_group_manager" "webapp_mig" {
   }
 }
 
+# Autoscaler
 resource "google_compute_region_autoscaler" "webapp_autoscaler" {
-  name   = "webapp-autoscaler"
+  name   = var.autoscaler_name
   target = google_compute_region_instance_group_manager.webapp_mig.id
   region = var.region
 
   autoscaling_policy {
-    max_replicas    = 6
-    min_replicas    = 3
-    cooldown_period = 60
+    max_replicas    = var.autoscaler_max_replicas
+    min_replicas    = var.autoscaler_min_replicas
+    cooldown_period = var.autoscaler_cooldown_period
 
     cpu_utilization {
-      target = 0.20
+      target = var.cpu_utilization_target
     }
   }
 }
@@ -492,38 +516,37 @@ module "gce-lb-http" {
   source                = "terraform-google-modules/lb-http/google"
   version               = "~> 10.0"
   project               = var.project_id
-  name                  = "webapp-lb"
-  target_tags           = ["webapp-lb"]
-  load_balancing_scheme = "EXTERNAL_MANAGED"
+  name                  = var.lb_name
+  target_tags           = var.lb_target_tags
+  load_balancing_scheme = var.lb_load_balancing_scheme
 
-  ssl                             = true
-  managed_ssl_certificate_domains = ["chinmaygulhane.me"]
-  http_forward                    = false
-
+  ssl                             = var.ssl_enabled
+  managed_ssl_certificate_domains = var.managed_ssl_certificate_domains
+  http_forward                    = var.http_forward_enabled
 
   network = google_compute_network.app_vpcs["app_vpc_network"].name
 
   backends = {
     default = {
-      description = "Webapp backend"
-      protocol    = "HTTP"
-      port_name   = "http"
-      timeout_sec = 10
-      enable_cdn  = false
+      description = var.backend_description
+      protocol    = var.backend_protocol
+      port_name   = var.backend_port_name
+      timeout_sec = var.backend_timeout_sec
+      enable_cdn  = var.backend_enable_cdn
 
       log_config = {
-        enable      = true
-        sample_rate = 1.0
+        enable      = var.backend_log_enable
+        sample_rate = var.backend_log_sample_rate
       }
 
       health_check = {
-        check_interval_sec  = 10,
-        timeout_sec         = 5,
-        healthy_threshold   = 2,
-        unhealthy_threshold = 3,
-        request_path        = "/healthz",
-        port                = 8080
-      },
+        check_interval_sec  = var.health_check_check_interval_sec
+        timeout_sec         = var.health_check_timeout_sec
+        healthy_threshold   = var.health_check_healthy_threshold
+        unhealthy_threshold = var.health_check_unhealthy_threshold
+        request_path        = var.health_check_request_path
+        port                = var.health_check_port
+      }
 
       groups = [
         {
@@ -532,13 +555,13 @@ module "gce-lb-http" {
       ]
 
       iap_config = {
-        enable = false
+        enable = var.iap_enable
       }
     }
   }
 }
 
-# Update the DNS A record to point to the load balancer's IP address
+# DNS A record 
 resource "google_dns_record_set" "webapp_a_record" {
   name         = "${var.domain_name}."
   type         = "A"
