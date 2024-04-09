@@ -290,11 +290,11 @@ variable "a_record_ttl" {
 
 # Service account
 variable "service_account_id" {
-  default = "vm-logging-service-account"
+  default = "vm-service-account"
 }
 
 variable "service_account_display_name" {
-  default = "VM logging service account"
+  default = "VM service account"
 }
 
 variable "logging_admin_role" {
