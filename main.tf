@@ -1,5 +1,5 @@
 # Creating a service account which will be attached to the webapp instance for logging
-resource "google_service_account" "logging_service_account" {
+resource "google_service_account" "vm_service_account" {
   account_id   = var.service_account_id
   display_name = var.service_account_display_name
 }
@@ -9,42 +9,42 @@ resource "google_service_account" "logging_service_account" {
 resource "google_project_iam_member" "logging_admin" {
   project = var.project_id
   role    = var.logging_admin_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 # Monitoring Metric Writer role
 resource "google_project_iam_member" "metric_writer" {
   project = var.project_id
   role    = var.metric_writer_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 # Pub/Sub Publisher role
 resource "google_project_iam_member" "pubsub_editor" {
   project = var.project_id
   role    = var.pubsub_editor_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 # Token creator role
 resource "google_project_iam_member" "pubsub_sa_token_creator" {
   project = var.project_id
   role    = var.token_creator_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 # Cloud Functions Invoker Role
 resource "google_project_iam_member" "cloud_functions_invoker" {
   project = var.project_id
   role    = var.cloudfunction_invoker_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 # Cloud Run Invoker Role
 resource "google_project_iam_member" "cloud_run_invoker" {
   project = var.project_id
   role    = var.cloudfunction_run_invoker_role
-  member  = "serviceAccount:${google_service_account.logging_service_account.email}"
+  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
 resource "random_id" "key_ring_suffix" {
@@ -125,16 +125,16 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   ]
 }
 
-resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+resource "google_project_service_identity" "gcp_service_account_cloud_sql" {
   project  = var.project_id
   provider = google-beta
   service  = "sqladmin.googleapis.com"
 }
 
-resource "google_project_iam_member" "cloud_sql_sa_kms_role" {
+resource "google_project_iam_member" "cloud_sql_sservice_account_kms_role" {
   project = var.project_id
   role    = var.kms_role
-  member  = "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
+  member  = "serviceAccount:${google_project_service_identity.gcp_service_account_cloud_sql.email}"
 }
 
 # Create cloud sql instance
@@ -236,67 +236,6 @@ data "google_compute_image" "my_image" {
   most_recent = true
 }
 
-# Adding webapp vm instance
-# resource "google_compute_instance" "webapp-instance" {
-#   machine_type              = var.machine_type
-#   name                      = var.instance_name
-#   allow_stopping_for_update = true
-#   zone                      = var.zone
-#   tags                      = var.tags
-
-#   boot_disk {
-#     auto_delete = true
-#     device_name = "webapp"
-
-#     initialize_params {
-#       image = data.google_compute_image.my_image.self_link
-#       size  = var.boot_disk_size
-#       type  = var.boot_disk_type
-#     }
-
-#     mode = "READ_WRITE"
-#   }
-
-#   network_interface {
-#     access_config {
-#       network_tier = var.network_tier
-#     }
-#     subnetwork = "projects/${var.project_id}/regions/${var.region}/subnetworks/webapp"
-#   }
-
-#   service_account {
-#     email  = google_service_account.logging_service_account.email
-#     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-#   }
-
-#   metadata = {
-#     startup-script = <<-EOT
-#     #!/bin/bash
-#     # Check if the script has already run
-#     if [ -f "/opt/.env_configured" ]; then
-#       exit 0
-#     fi
-
-#     # Populate the .env file
-#     echo "DATABASE=${var.cloud_sql_database_name}" > /opt/webapp/.env
-#     echo "USERNAME=${var.cloud_sql_database_user_name}" >> /opt/webapp/.env
-#     echo "PASSWORD=${random_password.webapp_db_user_password.result}" >> /opt/webapp/.env
-#     echo "HOST=${google_sql_database_instance.cloud_sql_instance.private_ip_address}" >> /opt/webapp/.env
-#     echo "PORT=${var.cloud_sql_database_port}" >> /opt/webapp/.env
-#     echo "DOMAIN_NAME=${var.domain_name}" >> /opt/webapp/.env
-#     echo "ENV=prod" >> /opt/webapp/.env
-#     echo "PUBSUB_TOPIC_NAME=${google_pubsub_topic.pubsub_topic.name}" >> /opt/webapp/.env
-#     # Mark script as run by creating a file
-#     touch /opt/.env_configured
-#     EOT
-#   }
-
-#   depends_on = [
-#     google_service_account.logging_service_account,
-#     google_compute_subnetwork.app_subnets["webapp"]
-#   ]
-# }
-
 # Create a Google Cloud Storage Bucket for the Function Code
 resource "random_id" "bucket_suffix" {
   byte_length = var.bucket_suffix_byte_length
@@ -306,7 +245,7 @@ data "google_storage_project_service_account" "gcs_account" {
   project = var.project_id
 }
 
-resource "google_kms_crypto_key_iam_binding" "bucket_crypto_key_iam" {
+resource "google_kms_crypto_key_iam_binding" "bucket_key_iam" {
   provider      = google-beta
   crypto_key_id = google_kms_crypto_key.gcs_key.id
   role          = var.kms_role
@@ -323,7 +262,7 @@ resource "google_storage_bucket" "function_code_bucket" {
     default_kms_key_name = google_kms_crypto_key.gcs_key.id
   }
   depends_on = [
-    google_kms_crypto_key_iam_binding.bucket_crypto_key_iam
+    google_kms_crypto_key_iam_binding.bucket_key_iam
   ]
 }
 
@@ -353,6 +292,7 @@ resource "google_pubsub_subscription" "pubsub_subscription" {
   ack_deadline_seconds = var.pubsub_ack_deadline_seconds
 }
 
+# cloud function for email
 resource "google_cloudfunctions2_function" "webapp_email_function" {
   name        = var.cloud_function_name
   description = var.cloud_function_description
@@ -377,7 +317,7 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
     max_instance_count            = var.cloud_function_max_instance_count
     vpc_connector                 = google_vpc_access_connector.webapp_connector.id
     vpc_connector_egress_settings = var.cloud_function_vpc_connector_egress_settings
-    service_account_email         = google_service_account.logging_service_account.email
+    service_account_email         = google_service_account.vm_service_account.email
     environment_variables = {
       MAILGUN_API_KEY      = var.mailgun_api_key
       DATABASE             = var.cloud_sql_database_name
@@ -394,26 +334,15 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
     event_type            = var.cloud_function_event_type
     pubsub_topic          = google_pubsub_topic.pubsub_topic.id
     retry_policy          = var.cloud_function_retry_policy
-    service_account_email = google_service_account.logging_service_account.email
+    service_account_email = google_service_account.vm_service_account.email
     trigger_region        = var.region
   }
 }
-
-
 
 # Data block to fetch cloud dns zone configured in GCP
 data "google_dns_managed_zone" "webapp_zone" {
   name = var.dns_managed_zone_name
 }
-
-# Create A record for webapp instance
-# resource "google_dns_record_set" "webapp_a_record" {
-#   name         = "${var.domain_name}."
-#   type         = "A"
-#   ttl          = var.a_record_ttl
-#   managed_zone = data.google_dns_managed_zone.webapp_zone.name
-#   rrdatas      = [google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip]
-# }
 
 #  Assignment 8 
 resource "google_project_iam_member" "kms_role_to_compute_service_account" {
@@ -445,14 +374,11 @@ resource "google_compute_region_instance_template" "webapp_instance_template" {
     access_config {
     }
   }
-
   service_account {
-    email  = google_service_account.logging_service_account.email
+    email  = google_service_account.vm_service_account.email
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
   }
-
   tags = var.tags
-
   metadata = {
     startup-script = <<-EOT
       #!/bin/bash
@@ -473,7 +399,6 @@ resource "google_compute_region_instance_template" "webapp_instance_template" {
       touch /opt/.env_configured
     EOT
   }
-
   lifecycle {
     create_before_destroy = true
   }
@@ -483,41 +408,34 @@ resource "google_compute_region_instance_template" "webapp_instance_template" {
 resource "google_compute_region_health_check" "regional_health_check" {
   name   = var.health_check_name
   region = var.region
-
   http_health_check {
     port         = var.http_port
     request_path = var.request_path
   }
-
   timeout_sec         = var.timeout_sec
   check_interval_sec  = var.check_interval_sec
   unhealthy_threshold = var.unhealthy_threshold
   healthy_threshold   = var.healthy_threshold
 }
 
-# Manage Instance Groups
+# Manage Instance Group
 resource "google_compute_region_instance_group_manager" "webapp_mig" {
   name               = var.mig_name
   region             = var.region
   base_instance_name = var.base_instance_name
-
   version {
     name              = "primary"
     instance_template = google_compute_region_instance_template.webapp_instance_template.id
   }
-
   named_port {
     name = var.named_port_name
     port = var.named_port_port
   }
-
   distribution_policy_zones = var.distribution_policy_zones
-
   auto_healing_policies {
     health_check      = google_compute_region_health_check.regional_health_check.self_link
     initial_delay_sec = var.auto_healing_initial_delay_sec
   }
-
   lifecycle {
     create_before_destroy = true
   }
@@ -562,12 +480,10 @@ module "gce-lb-http" {
       port_name   = var.backend_port_name
       timeout_sec = var.backend_timeout_sec
       enable_cdn  = var.backend_enable_cdn
-
       log_config = {
         enable      = var.backend_log_enable
         sample_rate = var.backend_log_sample_rate
       }
-
       health_check = {
         check_interval_sec  = var.health_check_check_interval_sec
         timeout_sec         = var.health_check_timeout_sec
@@ -576,13 +492,11 @@ module "gce-lb-http" {
         request_path        = var.health_check_request_path
         port                = var.health_check_port
       }
-
       groups = [
         {
           group = google_compute_region_instance_group_manager.webapp_mig.instance_group
         }
       ]
-
       iap_config = {
         enable = var.iap_enable
       }
