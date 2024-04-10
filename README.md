@@ -17,3 +17,4 @@
 5. Cloud Functions API
 6. Cloud Pub/Sub API
 7. Serverless VPC Access API
+8. Implemented KMS
