@@ -518,7 +518,7 @@ variable "autoscaler_cooldown_period" {
 
 variable "cpu_utilization_target" {
   type    = number
-  default = 0.05
+  default = 0.10
 }
 
 # Load Balancer

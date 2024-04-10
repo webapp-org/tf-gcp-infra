@@ -33,19 +33,27 @@ resource "google_project_iam_member" "pubsub_sa_token_creator" {
   member  = "serviceAccount:${google_service_account.vm_service_account.email}"
 }
 
+# Cloud Function Service Account
+resource "google_service_account" "cloud_function_service_account" {
+  account_id   = "cloud-function-invoker"
+  display_name = "Cloud Function Service Account"
+  project      = var.project_id
+}
+
 # Cloud Functions Invoker Role
 resource "google_project_iam_member" "cloud_functions_invoker" {
   project = var.project_id
-  role    = var.cloudfunction_invoker_role
-  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
+  role    = "roles/cloudfunctions.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_function_service_account.email}"
 }
 
 # Cloud Run Invoker Role
 resource "google_project_iam_member" "cloud_run_invoker" {
   project = var.project_id
-  role    = var.cloudfunction_run_invoker_role
-  member  = "serviceAccount:${google_service_account.vm_service_account.email}"
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_function_service_account.email}"
 }
+
 
 resource "random_id" "key_ring_suffix" {
   byte_length = var.key_ring_suffix_byte_length
@@ -317,7 +325,7 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
     max_instance_count            = var.cloud_function_max_instance_count
     vpc_connector                 = google_vpc_access_connector.webapp_connector.id
     vpc_connector_egress_settings = var.cloud_function_vpc_connector_egress_settings
-    service_account_email         = google_service_account.vm_service_account.email
+    service_account_email         = google_service_account.cloud_function_service_account.email
     environment_variables = {
       MAILGUN_API_KEY      = var.mailgun_api_key
       DATABASE             = var.cloud_sql_database_name
@@ -334,7 +342,7 @@ resource "google_cloudfunctions2_function" "webapp_email_function" {
     event_type            = var.cloud_function_event_type
     pubsub_topic          = google_pubsub_topic.pubsub_topic.id
     retry_policy          = var.cloud_function_retry_policy
-    service_account_email = google_service_account.vm_service_account.email
+    service_account_email = google_service_account.cloud_function_service_account.email
     trigger_region        = var.region
   }
 }
