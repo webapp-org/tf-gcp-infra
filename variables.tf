@@ -404,7 +404,7 @@ variable "cloud_function_vpc_connector_egress_settings" {
 }
 
 variable "mailgun_api_key" {
-  default = "20e98bda0732db1d6bc0220a4de06b97-309b0ef4-c6f3b875"
+  default = ""
 }
 
 variable "mailgun_sender_email" {
